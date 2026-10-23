@@ -3916,6 +3916,9 @@ int ufshcd_map_desc_id_to_length(struct ufs_hba *hba,
 	case QUERY_DESC_IDN_INTERCONNECT:
 		*desc_len = hba->desc_size.interc_desc;
 		break;
+	case QUERY_DESC_IDN_HEALTH:
+		*desc_len = hba->desc_size.health_desc;
+		break;
 	case QUERY_DESC_IDN_STRING:
 		*desc_len = QUERY_DESC_MAX_SIZE;
 		break;
@@ -8023,6 +8026,7 @@ static void ufshcd_def_desc_sizes(struct ufs_hba *hba)
 	hba->desc_size.conf_desc = QUERY_DESC_CONFIGURATION_DEF_SIZE;
 	hba->desc_size.unit_desc = QUERY_DESC_UNIT_DEF_SIZE;
 	hba->desc_size.geom_desc = QUERY_DESC_GEOMETRY_DEF_SIZE;
+	hba->desc_size.health_desc = QUERY_DESC_HEALTH_DEF_SIZE;
 }
 
 /**
@@ -9861,6 +9865,57 @@ static ssize_t ufshcd_rpm_lvl_store(struct device *dev,
 	return ufshcd_pm_lvl_store(dev, attr, buf, count, true);
 }
 
+/*
+ * Device health descriptor (UFS 2.1), backported sysfs interface with the
+ * same layout as mainline:
+ * <ufshc>/health_descriptor/{eol_info,life_time_estimation_a,life_time_estimation_b}
+ */
+static ssize_t ufshcd_health_desc_show(struct device *dev, char *buf, u8 offset)
+{
+	struct ufs_hba *hba = dev_get_drvdata(dev);
+	u8 val = 0;
+	int ret;
+
+	pm_runtime_get_sync(hba->dev);
+	ret = ufshcd_read_desc_param(hba, QUERY_DESC_IDN_HEALTH, 0, offset,
+				     &val, sizeof(val));
+	pm_runtime_put_sync(hba->dev);
+	if (ret)
+		return ret;
+
+	return snprintf(buf, PAGE_SIZE, "0x%02x\n", val);
+}
+
+#define UFS_HEALTH_DESC_ATTR(_name, _offset)				\
+static ssize_t _name##_show(struct device *dev,				\
+			    struct device_attribute *attr, char *buf)	\
+{									\
+	return ufshcd_health_desc_show(dev, buf, _offset);		\
+}									\
+static DEVICE_ATTR_RO(_name)
+
+UFS_HEALTH_DESC_ATTR(eol_info, HEALTH_DESC_PARAM_EOL_INFO);
+UFS_HEALTH_DESC_ATTR(life_time_estimation_a, HEALTH_DESC_PARAM_LIFE_TIME_EST_A);
+UFS_HEALTH_DESC_ATTR(life_time_estimation_b, HEALTH_DESC_PARAM_LIFE_TIME_EST_B);
+
+static struct attribute *ufshcd_health_desc_attrs[] = {
+	&dev_attr_eol_info.attr,
+	&dev_attr_life_time_estimation_a.attr,
+	&dev_attr_life_time_estimation_b.attr,
+	NULL
+};
+
+static const struct attribute_group ufshcd_health_desc_group = {
+	.name = "health_descriptor",
+	.attrs = ufshcd_health_desc_attrs,
+};
+
+static void ufshcd_add_health_desc_sysfs_nodes(struct ufs_hba *hba)
+{
+	if (sysfs_create_group(&hba->dev->kobj, &ufshcd_health_desc_group))
+		dev_err(hba->dev, "Failed to create sysfs for health_descriptor\n");
+}
+
 static void ufshcd_add_rpm_lvl_sysfs_nodes(struct ufs_hba *hba)
 {
 	hba->rpm_lvl_attr.show = ufshcd_rpm_lvl_show;
@@ -9922,6 +9977,7 @@ static inline void ufshcd_add_sysfs_nodes(struct ufs_hba *hba)
 {
 	ufshcd_add_rpm_lvl_sysfs_nodes(hba);
 	ufshcd_add_spm_lvl_sysfs_nodes(hba);
+	ufshcd_add_health_desc_sysfs_nodes(hba);
 }
 
 static void __ufshcd_shutdown_clkscaling(struct ufs_hba *hba)

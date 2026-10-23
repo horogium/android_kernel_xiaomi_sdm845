@@ -69,6 +69,8 @@
 #define UFS_MAX_LUS	(UFS_UPIU_MAX_GENERAL_LUN + UFS_MAX_WLUS)
 
 #define QUERY_DESC_IDN_CONFIGURATION	QUERY_DESC_IDN_CONFIGURAION
+/* Device health descriptor (UFS 2.1) uses the IDN the uapi enum calls RFU_2 */
+#define QUERY_DESC_IDN_HEALTH		QUERY_DESC_IDN_RFU_2
 
 /* Well known logical unit id in LUN field of UPIU */
 enum {
@@ -155,6 +157,16 @@ enum ufs_desc_def_size {
 	QUERY_DESC_INTERCONNECT_DEF_SIZE	= 0x06,
 	QUERY_DESC_GEOMETRY_DEF_SIZE		= 0x44,
 	QUERY_DESC_POWER_DEF_SIZE		= 0x62,
+	QUERY_DESC_HEALTH_DEF_SIZE		= 0x25,
+};
+
+/* Health descriptor parameters offsets in bytes */
+enum health_desc_param {
+	HEALTH_DESC_PARAM_LEN			= 0x0,
+	HEALTH_DESC_PARAM_TYPE			= 0x1,
+	HEALTH_DESC_PARAM_EOL_INFO		= 0x2,
+	HEALTH_DESC_PARAM_LIFE_TIME_EST_A	= 0x3,
+	HEALTH_DESC_PARAM_LIFE_TIME_EST_B	= 0x4,
 };
 
 /* Unit descriptor parameters offsets in bytes*/
